@@ -81,6 +81,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
                       fontSize: 22,
                       fontWeight: FontWeight.bold,
                       color: Colors.white,
+                      
+                  
                     ),
                   ),
                 ),

@@ -9,6 +9,7 @@ class SplashScreen extends StatefulWidget {
 class _SplashScreenState extends State<SplashScreen> {
   final AuthService _authService = AuthService();
 
+
   @override
   void initState() {
     super.initState();

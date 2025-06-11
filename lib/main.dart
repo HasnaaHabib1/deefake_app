@@ -21,7 +21,6 @@ import 'screens/reset_password.dart';
 import 'screens/verify_reset_otp.dart';
 import 'screens/Send_Feedback.dart';
 
-
 void main() {
   runApp(MyApp());
 }
@@ -49,7 +48,9 @@ class MyApp extends StatelessWidget {
 
           case '/verify':
             final args = settings.arguments as Map<String, dynamic>?;
-            if (args == null || !args.containsKey('email') || !args.containsKey('token')) {
+            if (args == null ||
+                !args.containsKey('email') ||
+                !args.containsKey('token')) {
               return _errorRoute(settings.name);
             }
             return MaterialPageRoute(
@@ -65,7 +66,8 @@ class MyApp extends StatelessWidget {
           case '/result':
             final args = settings.arguments;
             if (args is! File) return _errorRoute(settings.name);
-            return MaterialPageRoute(builder: (_) => ResultPage(imageFile: args));
+            return MaterialPageRoute(
+                builder: (_) => ResultPage(imageFile: args));
 
           case '/profile':
             return MaterialPageRoute(builder: (_) => ProfileOverviewScreen());
@@ -92,14 +94,16 @@ class MyApp extends StatelessWidget {
             return MaterialPageRoute(builder: (_) => FAQsPage());
 
           case '/Send_Feedback':
-            return MaterialPageRoute(builder: (_) => SendFeedbackPage());  
+            return MaterialPageRoute(builder: (_) => SendFeedbackPage());
 
           case '/reset_password':
             return MaterialPageRoute(builder: (_) => ResetPasswordPage());
 
           case '/verify_reset_otp':
             final args = settings.arguments as Map<String, dynamic>?;
-            if (args == null || !args.containsKey('email') || !args.containsKey('token')) {
+            if (args == null ||
+                !args.containsKey('email') ||
+                !args.containsKey('token')) {
               return _errorRoute(settings.name);
             }
             return MaterialPageRoute(
@@ -115,7 +119,6 @@ class MyApp extends StatelessWidget {
       },
     );
   }
-
 
   Route _errorRoute(String? name) {
     return MaterialPageRoute(

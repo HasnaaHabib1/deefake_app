@@ -73,6 +73,30 @@ class AuthService {
     return false;
   }
 
+
+
+  Future<bool> validateUserSession() async {
+  try {
+    final response = await _dio.get(
+      '$baseUrl/user',
+      options: Options(headers: {
+        'Authorization': 'Bearer $_token',
+      }),
+    );
+    return response.statusCode == 200 && response.data['status'] == true;
+  } catch (e) {
+    return false;
+  }
+}
+
+
+
+
+
+
+
+
+
   Future<Map<String, dynamic>> register({
     required String name,
     required String email,

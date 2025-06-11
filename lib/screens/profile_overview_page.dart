@@ -195,7 +195,7 @@ class _ProfileOverviewScreenState extends State<ProfileOverviewScreen> {
             children: [
               IconButton(
                 icon: Icon(Icons.home,
-                    color: Color.fromRGBO(0, 21, 32, 0.74), size: 30),
+                    color: const Color.fromRGBO(1, 119, 183, 1), size: 30),
                 onPressed: () {
                   if (ModalRoute.of(context)?.settings.name != '/home') {
                     Navigator.pushNamedAndRemoveUntil(
@@ -207,8 +207,8 @@ class _ProfileOverviewScreenState extends State<ProfileOverviewScreen> {
                 icon: Icon(
                   Icons.person,
                   color: currentRoute == '/profile'
-                      ? Colors.blue
-                      : Color.fromRGBO(0, 21, 32, 0.74),
+                      ?Color.fromRGBO(0, 162, 255, 1)
+                      : Colors.cyan,
                   size: 30,
                 ),
                 onPressed: () {

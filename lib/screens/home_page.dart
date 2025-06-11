@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:deep_fake/services/model_servise.dart';
 import 'package:deep_fake/services/models/response/user.dart';
+import 'package:deep_fake/screens/result_page.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:video_player/video_player.dart';
@@ -15,7 +16,7 @@ class _HomePageState extends State<HomePage> {
   VideoPlayerController? _videoController;
   bool _isVideo = false;
   bool _isVideoPlaying = false;
-  bool _isLoading = false;     
+  bool _isLoading = false;
 
   Future<void> _pickMedia() async {
     final picker = ImagePicker();
@@ -158,13 +159,26 @@ class _HomePageState extends State<HomePage> {
                           setState(() => _isLoading = true);
                           try {
                             FileApiService api = FileApiService();
-                            UserFile result = await api.uploadFile(_media!);
+                            final result = await api.predictImage(_media!);
                             print(
-                                'ID: ${result.id}, Fake: ${result.isFake}, Confidence: ${result.confidenceScore}');
+                                'Prediction: ${result['prediction']}, Confidence: ${result['confidence']}');
 
-                                  
+                            // Navigate to result page
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) =>
+                                    ResultPage(imageFile: _media),
+                              ),
+                            );
+                            print(
+                                'Prediction: ${result['prediction']}, Confidence: ${result['confidence']}');
                           } catch (e) {
-                            print('Error uploading: $e');
+                            print('Error analyzing image: $e');
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                  content: Text('Failed to analyze image: $e')),
+                            );
                           } finally {
                             setState(() => _isLoading = false);
                           }

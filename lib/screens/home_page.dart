@@ -1,10 +1,16 @@
 import 'dart:io';
 import 'package:deep_fake/services/model_servise.dart';
-import 'package:deep_fake/services/models/response/user.dart';
 import 'package:deep_fake/screens/result_page.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:video_player/video_player.dart';
+
+class MediaFile {
+  final XFile file;
+  final bool isVideo;
+
+  MediaFile(this.file, this.isVideo);
+}
 
 class HomePage extends StatefulWidget {
   @override
@@ -21,46 +27,119 @@ class _HomePageState extends State<HomePage> {
   Future<void> _pickMedia() async {
     final picker = ImagePicker();
 
-    final pickedFile = await showDialog<XFile?>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text("Select Media"),
-        actions: [
-          TextButton(
-            onPressed: () async {
-              final file = await picker.pickImage(source: ImageSource.gallery);
-              Navigator.of(context).pop(file);
-            },
-            child: Text("Pick Image"),
-          ),
-          TextButton(
-            onPressed: () async {
-              final file = await picker.pickVideo(source: ImageSource.gallery);
-              Navigator.of(context).pop(file);
-            },
-            child: Text("Pick Video"),
-          ),
-        ],
-      ),
-    );
+    try {
+      bool? isVideo = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Select Media'),
+          content: const Text('Choose media type for analysis'),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop(null);
+              },
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                Navigator.of(context).pop(false);
+              },
+              child: const Text('Pick Image'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                Navigator.of(context).pop(true);
+              },
+              child: const Text('Pick Video'),
+            ),
+          ],
+        ),
+      );
 
-    if (pickedFile != null) {
-      File file = File(pickedFile.path);
-      bool isVideo = pickedFile.path.toLowerCase().endsWith('.mp4') ||
-          pickedFile.path.toLowerCase().endsWith('.mov');
+      if (isVideo == null) return;
+
+      final XFile? pickedFile;
+      if (isVideo) {
+        pickedFile = await picker.pickVideo(
+          source: ImageSource.gallery,
+          maxDuration: const Duration(minutes: 10),
+        );
+      } else {
+        pickedFile = await picker.pickImage(
+          source: ImageSource.gallery,
+          maxWidth: 1920,
+          maxHeight: 1080,
+          imageQuality: 85,
+        );
+      }
+
+      if (pickedFile == null) return;
+
+      final String ext = pickedFile.path.split('.').last.toLowerCase();
+      final List<String> supportedVideoFormats = [
+        'mp4',
+        'mov',
+        'avi',
+        'mkv',
+        'wmv',
+        'flv',
+        '3gp',
+        'webm'
+      ];
+      final List<String> supportedImageFormats = [
+        'jpg',
+        'jpeg',
+        'png',
+        'webp',
+        'gif'
+      ];
+
+      if (isVideo && !supportedVideoFormats.contains(ext)) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                  'Unsupported video format. Supported formats: ${supportedVideoFormats.join(", ")}'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      } else if (!isVideo && !supportedImageFormats.contains(ext)) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                  'Unsupported image format. Supported formats: ${supportedImageFormats.join(", ")}'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
+
+      final path = pickedFile.path;
 
       setState(() {
-        _media = file;
+        _media = File(path);
         _isVideo = isVideo;
       });
 
       if (isVideo) {
         _videoController?.dispose();
-        _videoController = VideoPlayerController.file(file)
-          ..initialize().then((_) {
-            setState(() {});
-            _videoController!.pause();
-          });
+        _videoController = VideoPlayerController.file(_media!);
+        await _videoController!.initialize();
+        setState(() {});
+      }
+    } catch (e) {
+      print('Error picking media: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error selecting media: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
       }
     }
   }
@@ -121,35 +200,32 @@ class _HomePageState extends State<HomePage> {
                       color: Colors.grey.withOpacity(0.4),
                       spreadRadius: 4,
                       blurRadius: 15,
-                      offset: Offset(0, 8),
+                      offset: const Offset(0, 8),
                     ),
                 ],
-                image: _isVideo
-                    ? null
-                    : _media != null
-                        ? DecorationImage(
-                            image: FileImage(_media!),
-                            fit: BoxFit.contain,
-                          )
-                        : DecorationImage(
-                            image: AssetImage('assets/login_image.png'),
-                            fit: BoxFit.contain,
-                          ),
               ),
-              child: _isVideo
-                  ? _videoController != null &&
-                          _videoController!.value.isInitialized
-                      ? AspectRatio(
-                          aspectRatio: _videoController!.value.aspectRatio,
-                          child: VideoPlayer(_videoController!),
-                        )
-                      : Center(child: CircularProgressIndicator())
-                  : null,
+              child: _media != null
+                  ? ClipRRect(
+                      borderRadius: BorderRadius.circular(20),
+                      child: _isVideo && _videoController != null
+                          ? AspectRatio(
+                              aspectRatio: _videoController!.value.aspectRatio,
+                              child: VideoPlayer(_videoController!),
+                            )
+                          : Image.file(
+                              _media!,
+                              fit: BoxFit.contain,
+                            ),
+                    )
+                  : Image.asset(
+                      'assets/login_image.png',
+                      fit: BoxFit.contain,
+                    ),
             ),
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text(
+                const Text(
                   'Click here to ',
                   style: TextStyle(fontSize: 20, fontWeight: FontWeight.w500),
                 ),
@@ -159,39 +235,44 @@ class _HomePageState extends State<HomePage> {
                           setState(() => _isLoading = true);
                           try {
                             FileApiService api = FileApiService();
-                            final result = await api.predictImage(_media!);
-                            print(
-                                'Prediction: ${result['prediction']}, Confidence: ${result['confidence']}');
+                            final result = _isVideo
+                                ? await api.predictVideo(_media!)
+                                : await api.predictImage(_media!);
 
-                            // Navigate to result page
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) =>
-                                    ResultPage(imageFile: _media),
-                              ),
-                            );
-                            print(
-                                'Prediction: ${result['prediction']}, Confidence: ${result['confidence']}');
+                            if (mounted) {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) =>
+                                      ResultPage(imageFile: _media),
+                                ),
+                              );
+                            }
                           } catch (e) {
-                            print('Error analyzing image: $e');
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                  content: Text('Failed to analyze image: $e')),
-                            );
+                            print('Error analyzing media: $e');
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Failed to analyze media: $e'),
+                                  backgroundColor: Colors.red,
+                                ),
+                              );
+                            }
                           } finally {
-                            setState(() => _isLoading = false);
+                            if (mounted) {
+                              setState(() => _isLoading = false);
+                            }
                           }
                         }
                       : null,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Color(0xff0177b7),
+                    backgroundColor: const Color(0xff0177b7),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(30),
                     ),
                   ),
                   child: _isLoading
-                      ? SizedBox(
+                      ? const SizedBox(
                           width: 20,
                           height: 20,
                           child: CircularProgressIndicator(
@@ -199,7 +280,7 @@ class _HomePageState extends State<HomePage> {
                             strokeWidth: 2,
                           ),
                         )
-                      : Text(
+                      : const Text(
                           'Detect',
                           style: TextStyle(color: Colors.white, fontSize: 15),
                         ),
@@ -220,25 +301,25 @@ class _HomePageState extends State<HomePage> {
       ),
       floatingActionButton: TweenAnimationBuilder<double>(
         tween: Tween(begin: 0.9, end: 1.2),
-        duration: Duration(seconds: 5),
+        duration: const Duration(seconds: 5),
         curve: Curves.easeInOut,
         builder: (context, scale, child) {
           return Transform.scale(scale: scale, child: child);
         },
         onEnd: () {
-          Future.delayed(Duration(milliseconds: 100), () {
-            if (mounted) setState(() {});
-          });
+          if (mounted) {
+            setState(() {});
+          }
         },
         child: SizedBox(
           width: 70,
           height: 80,
           child: FloatingActionButton(
             onPressed: _pickMedia,
-            backgroundColor: Color.fromRGBO(1, 119, 183, 1),
-            shape: CircleBorder(),
+            backgroundColor: const Color(0xff0177b7),
+            shape: const CircleBorder(),
             elevation: 8,
-            child: Icon(Icons.add_a_photo, color: Colors.white, size: 35),
+            child: const Icon(Icons.add_a_photo, color: Colors.white, size: 35),
           ),
         ),
       ),

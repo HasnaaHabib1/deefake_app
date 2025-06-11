@@ -9,6 +9,19 @@ class FileApiService {
   late final Dio _dio;
   String? _token;
 
+  // Define supported media formats
+  static const supportedVideoFormats = [
+    'mp4',
+    'mov',
+    'avi',
+    'mkv',
+    'wmv',
+    'flv',
+    '3gp',
+    'webm'
+  ];
+  static const supportedImageFormats = ['jpg', 'jpeg', 'png', 'webp', 'gif'];
+
   FileApiService({String? token, String? customBaseUrl})
       : baseUrl = customBaseUrl ?? defaultBaseUrl {
     _token = token;
@@ -18,9 +31,10 @@ class FileApiService {
           'Content-Type': 'multipart/form-data',
           if (_token != null) 'Authorization': 'Bearer $_token',
         },
-        connectTimeout: const Duration(minutes: 1),
-        receiveTimeout: const Duration(minutes: 1),
-        sendTimeout: const Duration(minutes: 1),
+        connectTimeout:
+            const Duration(minutes: 10), // Increased for video processing
+        receiveTimeout: const Duration(minutes: 10),
+        sendTimeout: const Duration(minutes: 10),
         validateStatus: (status) {
           return status != null && status < 500;
         }));
@@ -30,6 +44,13 @@ class FileApiService {
       responseBody: true,
       error: true,
     ));
+  }
+
+  bool _isValidMediaFormat(String filePath, bool isVideo) {
+    final ext = filePath.split('.').last.toLowerCase();
+    return isVideo
+        ? supportedVideoFormats.contains(ext)
+        : supportedImageFormats.contains(ext);
   }
 
   Future<UserFile> uploadFile(File file) async {
@@ -81,16 +102,48 @@ class FileApiService {
   }
 
   Future<Map<String, dynamic>> predictImage(File file) async {
+    return predictMedia(file, false);
+  }
+
+  Future<Map<String, dynamic>> predictVideo(File file) async {
+    return predictMedia(file, true);
+  }
+
+  Future<Map<String, dynamic>> predictMedia(File file, bool isVideo) async {
     try {
+      // Validate file format
+      if (!_isValidMediaFormat(file.path, isVideo)) {
+        final supportedFormats =
+            isVideo ? supportedVideoFormats : supportedImageFormats;
+        throw Exception(
+            'Unsupported file format. Supported formats: ${supportedFormats.join(", ")}');
+      }
+
+      // Get file size in MB
+      final fileSize = await file.length() / (1024 * 1024);
+      if (isVideo && fileSize > 100) {
+        // 100MB limit for videos
+        throw Exception(
+            'Video file is too large. Maximum size allowed is 100MB');
+      } else if (!isVideo && fileSize > 10) {
+        // 10MB limit for images
+        throw Exception(
+            'Image file is too large. Maximum size allowed is 10MB');
+      }
+
       String fileName = file.path.split('/').last;
       FormData formData = FormData.fromMap({
         'file': await MultipartFile.fromFile(file.path, filename: fileName),
+        'media_type': isVideo ? 'video' : 'image'
       });
 
-      print('Sending request to: $baseUrl/predict/');
+      const endpoint = '/predict/';
+      print('Sending request to: $baseUrl$endpoint');
+      print(
+          'File type: ${isVideo ? "video" : "image"}, Size: ${fileSize.toStringAsFixed(2)}MB');
 
       final response = await _dio.post(
-        '/predict/',
+        endpoint,
         data: formData,
         options: Options(
           headers: {
@@ -98,7 +151,7 @@ class FileApiService {
           },
           followRedirects: true,
           validateStatus: (status) {
-            return status != null && (status < 500 && status != 307);
+            return status != null && status < 500;
           },
         ),
       );
@@ -122,25 +175,37 @@ class FileApiService {
               'Invalid response type. Expected Map, got: ${response.data.runtimeType}');
           throw Exception('Server returned unexpected data format');
         }
+      } else if (response.statusCode == 400) {
+        final errorMessage =
+            response.data?['detail'] ?? 'Invalid file format or corrupted file';
+        throw Exception(errorMessage);
       } else {
         throw Exception('Server returned status: ${response.statusCode}');
       }
     } catch (e) {
-      print('Error in predictImage:');
-      print(e);
       if (e is DioException) {
-        if (e.response?.statusCode == 307) {
-          print('Received redirect response. Headers: ${e.response?.headers}');
+        if (e.type == DioExceptionType.connectionTimeout) {
           throw Exception(
-              'Server is redirecting the request. Please use the correct endpoint with trailing slash');
+              'Connection timeout. ${isVideo ? "Video processing may take longer than expected." : "Please try again."}');
         }
-        if (e.type == DioExceptionType.connectionTimeout ||
-            e.type == DioExceptionType.connectionError) {
+        if (e.type == DioExceptionType.connectionError) {
           throw Exception(
-              'Cannot connect to server at $baseUrl - Please check if the server is running');
+              'Cannot connect to server. Please check your internet connection and try again.');
+        }
+        if (e.response?.statusCode == 400) {
+          final errorMessage = e.response?.data?['detail'] ??
+              (isVideo
+                  ? 'Invalid video format or corrupted file'
+                  : 'Invalid image format or corrupted file');
+          throw Exception(errorMessage);
+        }
+        if (e.response?.statusCode == 500) {
+          final errorMessage = e.response?.data?['detail'] ?? 'Server error';
+          throw Exception('Server error: $errorMessage');
         }
       }
-      rethrow;
+      print('Error during prediction: $e');
+      throw Exception('Failed to analyze media: $e');
     }
   }
 }
